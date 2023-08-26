@@ -47,13 +47,11 @@ class Instructions(ctk.CTkLabel):
         super().__init__(parent)
         self.config(justify=ctk.LEFT, anchor='nw')
 
-check_log_file_exists
-
 def main():
     # Create the main window
     root = ctk.CTk()
     root.title("EMIS XML SNOMED Concept Extractor")
-    root.geometry("1300x460")
+    root.geometry("1245x560")
     root.resizable(False, False)  # Prevent window from being resized
 
     # Define the instructions text and its styling
@@ -62,21 +60,29 @@ def main():
     content = """Extract and categorise SNOMED codes from EMIS XML search exports to Excel.
 
 Features:
-- Supports multiple XML files containing many search definitions.
+- Supports multiple XML files containing many searches.
 - Produces an Excel workbook for each EMIS search.
-- For each workbook, creates tabs for each codeset.
-- Extracts child codes used in EMIS, unless excluded.
-- Identifies inactive SNOMED concepts; providing updated IDs.
+- For each workbook, creates tabs for each set of codes.
+- Extracts child codes recursively, unless excluded.
+- Identifies inactive SNOMED concepts, providing updated IDs.
 
 Instructions:
-1. Set file paths on the right.
-2. Need the 3 Microsoft Access databases? 
-Obtain from NHS TRUD: search for 'SNOMED CT UK Data Migration Workbench' subscirbe and choose the latest version.
+1. Set file paths to specify:
+    - `XML Input Directory`: Where you will drop `.xml` files.
+    - `DMWB NHS SNOMED.mdb`: Contains descriptions, concepts, and terms.
+    - `DMWB NHS SNOMED Transitive Closure.mdb`: Contains relationships.
+    - `DMWB NHS SNOMED History.mdb`: Maps inactive concepts to new concepts.
+    - `Output Directory`: Where Excel workbooks and `log.txt` will be saved.
+2. Obtain databases above from NHS TRUD if you haven't.
 3. Place XML file(s) from EMIS in the XML directory.
 4. Click 'Run'.
 
 Debugging:
 If the script is slow, ensure the databases have indexes configured.
+
+Notes:
+The program does not match concept IDs for EMIS Drug Groups or library items. 
+For such cases, you can typically use QOF or PCD refsets to find these codes.
 
 Author:
 Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
@@ -104,13 +110,18 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
     input_frame = CustomLabelFrame(main_frame, text="Configuration")
     input_frame.grid(row=0, column=1, padx=5, pady=2, sticky="nsew")
 
+     # Add a title above the input boxes in the `input_frame`
+    config_title_label = ctk.CTkLabel(input_frame, text="Configuration", font=("",16,"bold"))
+    config_title_label.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=5)
+
     # Add input fields with default values
     labels = ["XML Input Directory", "DMWB NHS SNOMED.mdb", "DMWB NHS SNOMED Transitive Closure.mdb", "DMWB NHS SNOMED History.mdb", "Output Directory"]
     for i, (label_text, default_value) in enumerate(zip(labels, [xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir])):
-        ctk.CTkLabel(input_frame, text=label_text, anchor='w',).grid(row=i, column=0, sticky="w", padx=5, pady=5)
+        row_num = i + 1  # Start from 1 to leave the 0th row for the title
+        ctk.CTkLabel(input_frame, text=label_text, anchor='w',).grid(row=row_num, column=0, sticky="w", padx=5, pady=5)
         entry = ctk.CTkEntry(input_frame, width=320)
         insert_path(entry, default_value.replace('\\\\', '\\'))
-        entry.grid(row=i, column=1, padx=5, pady=5)
+        entry.grid(row=row_num, column=1, padx=5, pady=5)
 
         btn = ctk.CTkButton(input_frame, text="Browse")
         if label_text.endswith(".mdb"):
@@ -118,28 +129,32 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
         else:
             btn.configure(command=lambda e=entry: (lambda: insert_path(e, select_directory(e.get()).replace('\\\\', '\\')))())
 
-        btn.grid(row=i, column=2, padx=5, pady=5)
+        btn.grid(row=row_num, column=2, padx=5, pady=5)
 
         entries.append(entry)
 
-   # Create a frame for the log display
+    validate_and_clear_invalid_paths(entries)
+
+    # Create a frame for the log display
     log_display_frame = ctk.CTkFrame(input_frame)
-    log_display_frame.grid(row=len(labels) + 1, column=0, columnspan=3, padx=5, pady=2, sticky="nsew")
+    log_display_frame.grid(row=len(labels) + 2, column=0, columnspan=3, padx=5, pady=5, sticky="nsew") # row number changed here
     log_display_frame.grid_rowconfigure(0, weight=1)
     log_display_frame.grid_columnconfigure(0, weight=1)
 
     # Use basic Text widget from tkinter here, as customtkinter doesn't seem to provide a replacement.
     from tkinter import Text, Scrollbar, ttk
-    log_display = Text(log_display_frame, height=13, width=60, wrap=ctk.WORD, state=tk.DISABLED)
+    log_display = Text(log_display_frame, height=18, width=60, wrap=ctk.WORD, state=tk.DISABLED)
     log_display.grid(row=0, column=0, sticky="nsew")
     scrollbar = ttk.Scrollbar(log_display_frame, orient="vertical", command=log_display.yview)
     scrollbar.grid(row=0, column=1, sticky="ns")
     log_display.config(yscrollcommand=scrollbar.set)
 
-     # Adjusting the log box and adding a title above it
-    log_title_label = ctk.CTkLabel(input_frame, text="Execution Log:")
-    log_title_label.grid(row=len(labels), column=0, sticky="w", padx=5, pady=5)
-    
+    # Adjusting the log box and adding a title above it
+    log_title_label = ctk.CTkLabel(input_frame, text="Execution Log",font=("",16,"bold"))
+    log_title_label.grid(row=len(labels) + 1, column=0, sticky="w", padx=5, pady=5)  # row number changed here
+
+    check_log_file_exists
+
     # Initialize logger for GUI
     handler = TextHandler(log_display)
     formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -154,8 +169,14 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
     run_btn.pack(side="right", padx=5, pady=5)
 
     # Create a frame for the license button at the bottom-left of the root window
-    license_frame = ctk.CTkFrame(root, fg_color="transparent")
-    license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+    # license_frame = ctk.CTkFrame(root, fg_color="transparent")
+    # license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+
+   # def open_license():
+        # webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
+
+    # license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
+    # license_btn.pack(side="left", padx=10, pady=5)
 
     def get_log_file_path():
         """Return the path to the log file."""
@@ -170,14 +191,8 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
         else:
             open_log_btn.pack_forget()
 
-    def open_license():
-        webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
-
     open_log_btn = ctk.CTkButton(run_frame, text="Open Log", command=open_log_file)
     update_open_log_button_visibility()
-
-    license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
-    license_btn.pack(side="left", padx=10, pady=5)
 
     # Create a StringVar for the last entry.
     output_dir_var = tk.StringVar(value=entries[-1].get())

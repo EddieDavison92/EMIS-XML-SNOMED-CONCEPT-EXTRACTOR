@@ -58,6 +58,12 @@ def validate_paths(entries):
         if not os.path.exists(path):
             entry.delete(0, tk.END)
 
+def validate_and_clear_invalid_paths(entry_widgets):
+    for entry in entry_widgets:
+        path = entry.get()
+        if not os.path.exists(path):
+            entry.delete(0, tk.END)
+
 # Call validate_paths before running the script in run_script function
 def run_script(entries):
     validate_paths(entries)
