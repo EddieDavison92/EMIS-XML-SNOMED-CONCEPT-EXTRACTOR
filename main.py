@@ -7,7 +7,10 @@ import os
 import subprocess
 import logging
 import threading
+import webbrowser
 from collections import deque
+
+ctk.set_default_color_theme("dark-blue")
 
 class TextHandler(logging.Handler):
     def __init__(self, text_widget, max_logs=500):
@@ -56,7 +59,7 @@ def main():
     # Define the instructions text and its styling
     header = """EMIS XML SNOMED CONCEPT EXTRACTOR
 ==================================="""
-    content = """Extract and categorise SNOMED codes from EMIS search exports as XML.
+    content = """Extract and categorise SNOMED codes from EMIS XML search exports to Excel.
 
 Features:
 - Supports multiple XML files containing many search definitions.
@@ -150,6 +153,10 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
     run_btn = ctk.CTkButton(run_frame, text="Run", command=lambda: run_script(entries))
     run_btn.pack(side="right", padx=5, pady=5)
 
+    # Create a frame for the license button at the bottom-left of the root window
+    license_frame = ctk.CTkFrame(root, fg_color="transparent")
+    license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+
     def get_log_file_path():
         """Return the path to the log file."""
         return os.path.join(entries[-1].get(), "log.txt")
@@ -163,8 +170,14 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
         else:
             open_log_btn.pack_forget()
 
+    def open_license():
+        webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
+
     open_log_btn = ctk.CTkButton(run_frame, text="Open Log", command=open_log_file)
     update_open_log_button_visibility()
+
+    license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
+    license_btn.pack(side="left", padx=10, pady=5)
 
     # Create a StringVar for the last entry.
     output_dir_var = tk.StringVar(value=entries[-1].get())
