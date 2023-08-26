@@ -1,3 +1,4 @@
 pyodbc
+configparser
 openpyxl
 customtkinter
