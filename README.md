@@ -1,14 +1,14 @@
 
 EMIS XML SNOMED CONCEPT EXTRACTOR
 ===================================
-Extract and categorise SNOMED codes from EMIS search exports as XML.
+Extract and categorise SNOMED codes from EMIS search XML exports to Excel.
 
 Features:
-- Supports multiple XML files containing many search definitions.
+- Supports multiple XML files containing many searches.
 - Produces an Excel workbook for each EMIS search.
-- For each workbook, creates tabs for each codeset.
-- Extracts child codes used in EMIS, unless excluded.
-- Identifies inactive SNOMED concepts; providing updated IDs.
+- For each workbook, creates tabs for each set of codes.
+- Extracts child codes recursively, unless excluded.
+- Identifies inactive SNOMED concepts, providing updated IDs.
 
 Instructions:
 1. Launch `EMIS XML SNOMED CONCEPT EXTRACTOR.exe`
@@ -26,7 +26,7 @@ Debugging:
 If the script is slow, ensure the databases have indexes configured.
 
 Notes:
-- The program does not match concept IDs for EMIS Drug Groups or library items. For such cases, you can typically use QOF or PCD refsets to find these codes.
+The program does not match concept IDs for EMIS Drug Groups or library items. For such cases, you can typically use QOF or PCD refsets to find these codes.
 
 Author:
 Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
