@@ -1,13 +1,9 @@
 import tkinter as tk
-import customtkinter as ctk
-from tkinter import ttk, filedialog
-from tkinter import messagebox
+from tkinter import filedialog
 import os
 import configparser
 import sys
-import subprocess
 import logging
-import threading
 
 # Global variables
 logger = logging.getLogger('') 
@@ -54,6 +50,12 @@ def insert_path(entry, path):
 
 def validate_paths(entries):
     for entry in entries:
+        path = entry.get()
+        if not os.path.exists(path):
+            entry.delete(0, tk.END)
+
+def validate_and_clear_invalid_paths(entry_widgets):
+    for entry in entry_widgets:
         path = entry.get()
         if not os.path.exists(path):
             entry.delete(0, tk.END)

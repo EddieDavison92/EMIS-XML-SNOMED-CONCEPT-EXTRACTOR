@@ -4,35 +4,12 @@ import pyodbc
 import time
 import re
 import logging
-import argparse
-import configparser
+from load_config import *
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from collections import defaultdict
-from tkinter import filedialog
-from tkinter import Tk
 
 IGNORED_VALUES = ['ACTIVE','REVIEW', 'ENDED', 'N/A', '385432009','C','U','R','RD','999011011000230107','12464001000001103']
 NAMESPACE = {'ns': 'http://www.e-mis.com/emisopen'}
-# Set up argument parsing
-parser = argparse.ArgumentParser(description='Process configuration paths.')
-parser.add_argument('--xml_directory', type=str)
-parser.add_argument('--database_path', type=str)
-parser.add_argument('--transitive_closure_db_path', type=str)
-parser.add_argument('--history_db_path', type=str)
-parser.add_argument('--output_dir', type=str)
-
-args = parser.parse_args()
-
-# Load config values from config.ini if arguments are not provided
-config = configparser.ConfigParser()
-config.read('config.ini')
-
-xml_directory = args.xml_directory if args.xml_directory else config['DEFAULT']['xml_directory']
-database_path = args.database_path if args.database_path else config['DEFAULT']['database_path']
-transitive_closure_db_path = args.transitive_closure_db_path if args.transitive_closure_db_path else config['DEFAULT']['transitive_closure_db_path']
-history_db_path = args.history_db_path if args.history_db_path else config['DEFAULT']['history_db_path']
-output_dir = args.output_dir if args.output_dir else config['DEFAULT']['output_dir']
 
 start_time = time.time() #start clock
 
@@ -44,12 +21,12 @@ logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime
 with open(log_filename, 'w'):
     pass
 
-# After setting up basicConfig
+# Initialize Logger
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger('').addHandler(console)
 
-# List and log XML files
+# List XML files
 xml_files = [f for f in os.listdir(xml_directory) if f.endswith('.xml')]
 logging.info(f"Found {len(xml_files)} XML files in the directory: {xml_directory}")
 for file in xml_files:
@@ -228,125 +205,93 @@ def get_new_cui_from_history(old_cui_list, connection_history):
     
     return results
 
+def fetch_cui_and_display_maps(value_set_data, connection_main):
+    tui_values = [entry[0] for entry in value_set_data]
+    display_names = [entry[1] for entry in value_set_data]
+    return get_cui_from_access(tui_values, display_names, connection_main)
+
+def process_value_set(value_set_data, ws, connection_main, connection_tc, connection_history, checked_cuis):
+    tui_to_cui_map, display_name_to_cui_map = fetch_cui_and_display_maps(value_set_data, connection_main)
+    all_codes_column, all_final_ids = set(), []
+    
+    new_cui_map = get_new_cui_from_history(all_final_ids, connection_history)
+    populate_worksheet(ws, value_set_data, tui_to_cui_map, display_name_to_cui_map, new_cui_map, all_codes_column, all_final_ids, connection_tc, checked_cuis)
+
+    write_all_concepts_to_columns(ws, all_codes_column, connection_main)
+    return len(all_codes_column)
+
+def populate_worksheet(ws, value_set_data, tui_to_cui_map, display_name_to_cui_map, new_cui_map, all_codes_column, all_final_ids, connection_tc, checked_cuis):
+    # Main loop to populate worksheet
+    for entry in value_set_data:
+        value, display_name, include_children, exceptions = entry
+        cui_value, display_name_cui_value, final_id = fetch_cui_values(tui_to_cui_map, display_name_to_cui_map, value, display_name)
+        new_cui = new_cui_map.get(final_id)
+        
+        ws.append([value, display_name, include_children, cui_value, display_name_cui_value, final_id, new_cui if new_cui else "N/A"])
+        handle_children_and_update_codes(all_codes_column, final_id, new_cui, include_children, connection_tc, exceptions, checked_cuis)
+
+        if final_id != "Not Found":
+            all_final_ids.append(final_id)
+
+def fetch_cui_values(tui_to_cui_map, display_name_to_cui_map, value, display_name):
+    cui_value = tui_to_cui_map.get(value, "Not Found")
+    display_name_cui_value = display_name_to_cui_map.get(display_name, "Not Found")
+    final_id = cui_value if cui_value != "Not Found" else display_name_cui_value
+    return cui_value, display_name_cui_value, final_id
+
+def handle_children_and_update_codes(all_codes_column, final_id, new_cui, include_children, connection_tc, exceptions, checked_cuis):
+    if final_id != "Not Found":
+        all_codes_column.add(final_id)
+        checked_cuis.add(final_id)
+    
+    if include_children == "true":
+        # Existing and potential new Concept IDs
+        for code in filter(lambda x: x != "Not Found", [final_id, new_cui]):
+            try:
+                children = get_all_children_from_database(code, connection_tc, exceptions=exceptions)
+                all_codes_column.update(children)
+            except Exception as e:
+                logging.info(f"Did not include child codes for {code}: {e}")
+
+def write_all_concepts_to_columns(ws, all_codes_column, connection_main):
+    ws['J1'], ws['K1'] = 'All Concepts including Children', 'Terms for All Concepts'
+    code_to_term_map = fetch_all_terms(all_codes_column, connection_main)
+    populate_columns_j_and_k(ws, code_to_term_map, all_codes_column)
+
+def fetch_all_terms(all_codes_column, connection_main):
+    # Fetch terms for all_codes_column
+    code_to_term_map = {}
+    try:
+        query = f"SELECT CUI, Term FROM SCT WHERE CUI IN ({','.join(['?'] * len(all_codes_column))})"
+        cursor_main = connection_main.cursor()
+        cursor_main.execute(query, list(all_codes_column))
+        code_to_term_map = {row.CUI: row.Term for row in cursor_main.fetchall()}
+    except Exception as e:
+        logging.info(f"Exception while fetching terms: {e}")
+    return code_to_term_map
+
+def populate_columns_j_and_k(ws, code_to_term_map, all_codes_column):
+    for idx, (code, term) in enumerate(code_to_term_map.items(), start=2):
+        if code in all_codes_column:
+            ws[f'J{idx}'] = code
+            ws[f'K{idx}'] = term
+
 def save_to_xlsx(data, file_path, connection_main, connection_tc, connection_history):
     total_value_sets = len(data)
-    logging.info(f"Starting to process {total_value_sets} data sets, lookup concept IDs and identify any relevant child codes")
     wb = Workbook()
-    ws = wb.active
-    wb.remove(ws)  # Remove the default sheet created
-
-    # Initialize a set to keep track of all Concept IDs that have been checked
+    wb.remove(wb.active) 
+    
     checked_cuis = set()
-
     for idx, value_set_data in enumerate(data, 1):
-        logging.info(f"Processing value set {idx}/{total_value_sets}:")
-        tui_values = [entry[0] for entry in value_set_data]
-        display_names = [entry[1] for entry in value_set_data]
+        ws = wb.create_sheet(title=str(idx))
+        ws.append(['Description ID', 'DisplayName', 'IncludeChildren', 'Concept ID from Description', 'Concept ID from DisplayName', 'Best Concept ID from Description or DisplayName', 'New Concept ID Exists'])
         
-        tui_to_cui_map, display_name_to_cui_map = get_cui_from_access(tui_values, display_names, connection_main)
-        logging.info(f"Completed fetching CUI values for value set {idx}")
-
-        ws = wb.create_sheet(title=str(idx))  # Creating a new sheet with a numbered title
-        
-        # Adding headers
-        headers = ['Description ID', 'DisplayName', 'IncludeChildren', 'Concept ID from Description', 'Concept ID from DisplayName', 'Best Concept ID from Description or DisplayName', 'New Concept ID Exists']
-        ws.append(headers)
-        
-        all_codes_column = set()  # We'll use a set to ensure uniqueness
-
-        # Collect all final_id values in a list
-        all_final_ids = []  # Initialize an empty list to collect final_id values
-
-        # Check if any final_id in the current value set has include_children set to "true"
-        if not any(entry[2] == "true" for entry in value_set_data):  # Assuming entry[2] is include_children
-            logging.info(f"No child codes need to be looked up for value set {idx}.")
-        else:
-            logging.info(f"Fetching child codes for set {idx} from {transitive_closure_db_path}")
-        # Populate all_final_ids list
-        for entry in value_set_data:
-            value, display_name, include_children, exceptions = entry
-            cui_value = tui_to_cui_map.get(value, "Not Found")
-            display_name_cui_value = display_name_to_cui_map.get(display_name, "Not Found")
-            final_id = cui_value if cui_value != "Not Found" else display_name_cui_value
-            all_final_ids.append(final_id)
-            checked_cuis.add(final_id)  # Add the final_id to the checked_cuis set
-
-        # Populate new_cui_map using the populated all_final_ids list
-        new_cui_map = get_new_cui_from_history(all_final_ids, connection_history)
-
-        # Process each entry in value_set_data and append rows to the worksheet
-        for entry in value_set_data:
-            value, display_name, include_children, exceptions = entry
-            cui_value = tui_to_cui_map.get(value, "Not Found")
-            display_name_cui_value = display_name_to_cui_map.get(display_name, "Not Found")
-            final_id = cui_value if cui_value != "Not Found" else display_name_cui_value
-            new_cui = new_cui_map.get(final_id)
-            row = [value, display_name, include_children, cui_value, display_name_cui_value, final_id, new_cui if new_cui else "N/A"]
-            ws.append(row)
-
-            # Always add the parent code to all_codes_column, but only if it's not "Not Found"
-            if final_id != "Not Found":
-                all_codes_column.add(final_id)
-
-            # If IncludeChildren is true and final_id is not "Not Found", traverse the hierarchy and fetch child codes
-            if include_children == "true":
-                codes_to_check_for_children = [final_id]  # Start with the original code
-                if new_cui:  # If there's a new Concept ID, add it to the list of codes to check
-                    codes_to_check_for_children.append(new_cui)
-                
-                for code in codes_to_check_for_children:
-                    if code != "Not Found":
-                        try:
-                            children = get_all_children_from_database(code, connection_tc, exceptions=exceptions)
-                            all_codes_column.update(children)
-                        except Exception as e:
-                            logging.info(f"Did not include child codes for {code}: {e}")
-                            continue
-        
-        # Remove 'Not Found' from the all_codes_column
-        all_codes_column = {code for code in all_codes_column if code != "Not Found"}
-
-        # Now write the all_codes_column to Column J
-        ws['J1'] = 'All Concepts including Children'  # Setting the header for J
-        ws['K1'] = 'Terms for All Concepts'  # Setting the header for K
-        
-        # Fetch the terms for the codes in all_codes_column
-        logging.info(f"Fetching terms for 'All Codes' set {idx}")
-       
-        # Add all new CUIs to the list of codes
-        all_codes_column.update(new_cui_map.values())
-        code_to_term_map = {}
-        if all_codes_column:
-            try:
-                codes_placeholder = ",".join(['?'] * len(all_codes_column))
-                query = f"SELECT CUI, Term FROM SCT WHERE CUI IN ({codes_placeholder})"
-                cursor_main = connection_main.cursor()
-                cursor_main.execute(query, list(all_codes_column))
-                for row in cursor_main.fetchall():
-                    code_to_term_map[row.CUI] = row.Term
-            except Exception as e:
-                logging.info(f"Exception occurred while fetching terms for 'All Codes' set {idx}: {e}")
-                continue
-            logging.info(f"Completed fetching terms for 'All Codes' set {idx}\n")
-
-        # Initialize the row index for columns J and K
-        jk_row_index = 2
-
-        # Populate columns J and K
-        for code, term in code_to_term_map.items():
-            if code in all_codes_column:
-                ws[f'J{jk_row_index}'] = code
-                ws[f'K{jk_row_index}'] = term
-                jk_row_index += 1  # Increment the row index
-
-        processed_value_sets = idx  # Update the counter
-
+        process_value_set(value_set_data, ws, connection_main, connection_tc, connection_history, checked_cuis)
+    
     if not wb.worksheets:
-        logging.info(f"No value sets were processed as they were empty")
-        return (0, 0)  # Return processed_value_sets and total_value_sets both as 0
-
+        return 0, 0
     wb.save(file_path)
-    return processed_value_sets, total_value_sets
+    return len(wb.worksheets), total_value_sets
 
 if __name__ == "__main__":
     
