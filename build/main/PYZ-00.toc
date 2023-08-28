@@ -1668,6 +1668,9 @@
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.1520.0_x64__qbz5n2kfra8p0\\Lib\\tempfile.py',
    'PYMODULE'),
+  ('text',
+   'C:\\Users\\eddie\\OneDrive\\Documents\\Projects\\EMIS-XML-SNOMED-CONCEPT-EXTRACTOR\\text.py',
+   'PYMODULE'),
   ('textwrap',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.1520.0_x64__qbz5n2kfra8p0\\Lib\\textwrap.py',
