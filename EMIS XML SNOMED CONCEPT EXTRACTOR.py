@@ -214,7 +214,16 @@ def process_value_set(value_set_data, ws, connection_main, connection_tc, connec
     tui_to_cui_map, display_name_to_cui_map = fetch_cui_and_display_maps(value_set_data, connection_main)
     all_codes_column, all_final_ids = set(), []
     
+    # Populate all_final_ids here
+    for entry in value_set_data:
+        value, display_name, include_children, exceptions = entry
+        cui_value, display_name_cui_value, final_id = fetch_cui_values(tui_to_cui_map, display_name_to_cui_map, value, display_name)
+        all_final_ids.append(final_id)
+        # ... rest of your existing code
+    
+    # Fetch new CUIs based on history after populating all_final_ids
     new_cui_map = get_new_cui_from_history(all_final_ids, connection_history)
+
     populate_worksheet(ws, value_set_data, tui_to_cui_map, display_name_to_cui_map, new_cui_map, all_codes_column, all_final_ids, connection_tc, checked_cuis)
 
     write_all_concepts_to_columns(ws, all_codes_column, connection_main)
