@@ -9,25 +9,22 @@ import logging
 logger = logging.getLogger('') 
 config = configparser.ConfigParser()
 
+# Determine where the config.ini and script files should be
 if getattr(sys, 'frozen', False):
     config_file_path = os.path.join(sys._MEIPASS, 'config.ini')
-else:
-    config_file_path = 'config.ini'
-
-config.read(config_file_path)
-print(config.has_option('DEFAULT', 'xml_directory'))
-
-if getattr(sys, 'frozen', False):
     script_path = os.path.join(sys._MEIPASS, 'EMIS XML SNOMED CONCEPT EXTRACTOR.py')
 else:
-    script_path = 'EMIS XML SNOMED CONCEPT EXTRACTOR.py'
+    config_file_path = os.path.abspath('C:/Users/eddie/OneDrive/Documents/Projects/EMIS-XML-SNOMED-CONCEPT-EXTRACTOR/config.ini')
+    script_path = os.path.abspath('EMIS XML SNOMED CONCEPT EXTRACTOR.py')
 
-xml_directory = config.get('DEFAULT', 'xml_directory')
-for section in config.sections():
-    print(f"[{section}]")
-    for option in config.options(section):
-        print(f"{option} = {config.get(section, option)}")
-print(os.path.abspath('config.ini'))
+# Debugging logs
+logger.info(f"sys._MEIPASS: {getattr(sys, '_MEIPASS', 'N/A')}")
+logger.info(f"Current Working Directory: {os.getcwd()}")
+logger.info(f"Config file path: {config_file_path}")
+logger.info(f"Script path: {script_path}")
+
+# Read the configuration
+config.read(config_file_path)
 
 def select_directory(current_value="", file_mode=False):
     """Open a dialog to select a directory or file."""
@@ -60,22 +57,7 @@ def validate_and_clear_invalid_paths(entry_widgets):
         if not os.path.exists(path):
             entry.delete(0, tk.END)
 
-# Call validate_paths before running the script in run_script function
-def run_script(entries):
-    validate_paths(entries)
-    paths = [entry.get() for entry in entries]
-
-# Default Configuration Values
-user_profile = os.environ['USERPROFILE']
-xml_directory = config.get('DEFAULT', 'xml_directory')
-database_path = config.get('DEFAULT', 'database_path')
-transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path')
-history_db_path = config.get('DEFAULT', 'history_db_path')
-output_dir = config.get('DEFAULT', 'output_dir')
-
-# Store all entries in a list for easy access
-entries = []
-
+# Function to save the configuration
 def save_config(xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir):
     config['DEFAULT']['xml_directory'] = xml_directory
     config['DEFAULT']['database_path'] = database_path
@@ -83,12 +65,44 @@ def save_config(xml_directory, database_path, transitive_closure_db_path, histor
     config['DEFAULT']['history_db_path'] = history_db_path
     config['DEFAULT']['output_dir'] = output_dir
 
-    # Save to the config_file_path variable
     with open(config_file_path, 'w') as configfile:
         config.write(configfile)
+
+# Store all entries in a list for easy access
+entries = []
+
+# Load config values for the first time
+xml_directory = config.get('DEFAULT', 'xml_directory', fallback='')
+database_path = config.get('DEFAULT', 'database_path', fallback='')
+transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path', fallback='')
+history_db_path = config.get('DEFAULT', 'history_db_path', fallback='')
+output_dir = config.get('DEFAULT', 'output_dir', fallback='')
 
 def check_log_file_exists():
     global log_file_exists
     log_file_path = os.path.join(output_dir, "script_log.txt")
     if os.path.exists(log_file_path):
         log_file_exists = True
+
+
+def load_config(entries=None):
+    global xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir
+    if os.path.exists(config_file_path):
+        logger.info(f"Config file exists at {config_file_path}")
+        config.read(config_file_path)
+        xml_directory = config.get('DEFAULT', 'xml_directory', fallback='')
+        database_path = config.get('DEFAULT', 'database_path', fallback='')
+        transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path', fallback='')
+        history_db_path = config.get('DEFAULT', 'history_db_path', fallback='')
+        output_dir = config.get('DEFAULT', 'output_dir', fallback='')
+    else:
+        logger.error(f"Config file not found at {config_file_path}")
+        # Use the values from the Tkinter entries as fallbacks if available
+        if entries:
+            xml_directory = entries[0].get()
+            database_path = entries[1].get()
+            transitive_closure_db_path = entries[2].get()
+            history_db_path = entries[3].get()
+            output_dir = entries[4].get()
+    logger.info(f"Loading config from {config_file_path}")  # Debugging line
+

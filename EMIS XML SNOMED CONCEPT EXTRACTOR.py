@@ -4,14 +4,12 @@ import pyodbc
 import time
 import re
 import logging
-from load_config import xml_directory, output_dir, database_path, transitive_closure_db_path, history_db_path
+from directory_functions import xml_directory, output_dir, database_path, transitive_closure_db_path, history_db_path, load_config
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 IGNORED_VALUES = ['ACTIVE','REVIEW', 'ENDED', 'N/A', '385432009','C','U','R','RD','999011011000230107','12464001000001103']
 NAMESPACE = {'ns': 'http://www.e-mis.com/emisopen'}
-
-start_time = time.time() #start clock
 
 # Set up logging
 log_filename = os.path.join(output_dir, "log.txt")
@@ -25,6 +23,10 @@ with open(log_filename, 'w'):
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger('').addHandler(console)
+
+load_config()
+
+start_time = time.time() #start clock
 
 # List XML files
 xml_files = [f for f in os.listdir(xml_directory) if f.endswith('.xml')]

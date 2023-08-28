@@ -9,6 +9,8 @@ import threading
 import webbrowser
 from collections import deque
 
+load_config()
+
 ctk.set_default_color_theme("dark-blue")
 
 class TextHandler(logging.Handler):
@@ -201,12 +203,14 @@ def main():
         # Check for log file after the script completes
         update_open_log_button_visibility()
 
-    def run_script(entries):
-    
-        paths = [entry.get() for entry in entries]
+    def run_script(entries=None):
+        if entries:
+            paths = [entry.get() for entry in entries]
+        else:
+            paths = [xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir]
+
         save_config(*paths)
-        
-        # Construct the arguments for the script
+
         args = [
             "python", "-u",
             script_path,
@@ -217,7 +221,6 @@ def main():
             "--output_dir", paths[4]
         ]
 
-        # Start the subprocess in a separate thread
         thread = threading.Thread(target=execute_subprocess, args=(args,))
         thread.start()
 
