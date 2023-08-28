@@ -202,9 +202,10 @@ def main():
         update_open_log_button_visibility()
 
     def run_script(entries):
+    
         paths = [entry.get() for entry in entries]
         save_config(*paths)
-
+        
         # Construct the arguments for the script
         args = [
             "python", "-u",

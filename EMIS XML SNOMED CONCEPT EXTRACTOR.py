@@ -4,7 +4,7 @@ import pyodbc
 import time
 import re
 import logging
-from load_config import *
+from load_config import xml_directory, output_dir, database_path, transitive_closure_db_path, history_db_path
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 

@@ -4,8 +4,8 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-xml_directory = config['DEFAULT']['xml_directory']
-database_path = config['DEFAULT']['database_path']
-transitive_closure_db_path = config['DEFAULT']['transitive_closure_db_path']
-history_db_path = config['DEFAULT']['history_db_path']
-output_dir = config['DEFAULT']['output_dir']
+xml_directory = config['DEFAULT'].get('xml_directory', '')
+database_path = config['DEFAULT'].get('database_path', '')
+transitive_closure_db_path = config['DEFAULT'].get('transitive_closure_db_path', '')
+history_db_path = config['DEFAULT'].get('history_db_path', '')
+output_dir = config['DEFAULT'].get('output_dir', '')
