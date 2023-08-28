@@ -279,7 +279,7 @@ def populate_columns_j_and_k(ws, code_to_term_map, all_codes_column):
 def save_to_xlsx(data, file_path, connection_main, connection_tc, connection_history):
     total_value_sets = len(data)
     wb = Workbook()
-    wb.remove(wb.active)  # Remove default sheet
+    wb.remove(wb.active) 
     
     checked_cuis = set()
     for idx, value_set_data in enumerate(data, 1):
