@@ -23,6 +23,19 @@ logger.info(f"Current Working Directory: {os.getcwd()}")
 logger.info(f"Config file path: {config_file_path}")
 logger.info(f"Script path: {script_path}")
 
+if not os.path.exists(config_file_path):
+    logger.warning(f"Config file not found at {config_file_path}. Creating a new one with default settings.")
+    # Create a new config.ini with default settings
+    config['DEFAULT'] = {
+        'xml_directory': '',
+        'database_path': '',
+        'transitive_closure_db_path': '',
+        'history_db_path': '',
+        'output_dir': ''
+    }
+    with open(config_file_path, 'w') as configfile:
+        config.write(configfile)
+
 # Read the configuration
 config.read(config_file_path)
 
