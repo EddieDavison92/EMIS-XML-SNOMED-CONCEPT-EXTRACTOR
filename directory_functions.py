@@ -1,13 +1,9 @@
 import tkinter as tk
-import customtkinter as ctk
-from tkinter import ttk, filedialog
-from tkinter import messagebox
+from tkinter import filedialog
 import os
 import configparser
 import sys
-import subprocess
 import logging
-import threading
 
 # Global variables
 logger = logging.getLogger('') 

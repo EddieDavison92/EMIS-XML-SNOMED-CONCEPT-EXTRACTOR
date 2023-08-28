@@ -1,8 +1,7 @@
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import ttk, filedialog
-from tkinter import messagebox
 from directory_functions import *
+from text import header, content
 import os
 import subprocess
 import logging
@@ -54,39 +53,6 @@ def main():
     root.geometry("1245x560")
     root.resizable(False, False)  # Prevent window from being resized
 
-    # Define the instructions text and its styling
-    header = """EMIS XML SNOMED CONCEPT EXTRACTOR
-==================================="""
-    content = """Extract and categorise SNOMED codes from EMIS XML search exports to Excel.
-
-Features:
-- Supports multiple XML files containing many searches.
-- Produces an Excel workbook for each EMIS search.
-- For each workbook, creates tabs for each set of codes.
-- Extracts child codes recursively, unless excluded.
-- Identifies inactive SNOMED concepts, providing updated IDs.
-
-Instructions:
-1. Set file paths to specify:
-    - `XML Input Directory`: Where you will drop `.xml` files.
-    - `DMWB NHS SNOMED.mdb`: Contains descriptions, concepts, and terms.
-    - `DMWB NHS SNOMED Transitive Closure.mdb`: Contains relationships.
-    - `DMWB NHS SNOMED History.mdb`: Maps inactive concepts to new concepts.
-    - `Output Directory`: Where Excel workbooks and `log.txt` will be saved.
-2. Obtain databases above from NHS TRUD if you haven't.
-3. Place XML file(s) from EMIS in the XML directory.
-4. Click 'Run'.
-
-Debugging:
-If the script is slow, ensure the databases have indexes configured.
-
-Notes:
-The program does not match concept IDs for EMIS Drug Groups or library items. 
-For such cases, you can typically use QOF or PCD refsets to find these codes.
-
-Author:
-Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
-"""
     # Create a frame for the instructions and input fields
     main_frame = ctk.CTkFrame(root, fg_color="transparent")
     main_frame.grid(row=0, column=0, columnspan=2, padx=5, pady=2, sticky="nsew")
@@ -100,8 +66,8 @@ Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
     instructions_frame.grid(row=0, column=0, padx=5, pady=2, sticky='nsew')
 
     # Style the header and content labels
-    header_label = ctk.CTkLabel(instructions_frame, font=("",16), text=header, wraplength=520, justify='left', anchor='nw')
-    content_label = ctk.CTkLabel(instructions_frame, text=content, wraplength=520, justify='left', anchor='nw')
+    header_label = ctk.CTkLabel(instructions_frame, font=("",16), text=header(), wraplength=520, justify='left', anchor='nw')
+    content_label = ctk.CTkLabel(instructions_frame, text=content(), wraplength=520, justify='left', anchor='nw')
     
     header_label.pack(padx=5, pady=(5,0))
     content_label.pack(padx=5, pady=(2,5))
