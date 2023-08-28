@@ -11,4 +11,7 @@ pyvenv.cfg
 .venv
 v_env/
 venv/
+build/
+_pycache_/
+.vscode/
 pip-selfcheck.json
