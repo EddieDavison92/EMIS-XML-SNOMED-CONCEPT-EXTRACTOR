@@ -1,18 +1,23 @@
 import os
 import configparser
+from directory_functions import save_config, load_config
 
-# Get the directory where the script is running
-script_dir = os.path.dirname(os.path.abspath(__file__))
+# The path to the config.ini file
+config_file_path = "config.ini"
 
-# Create the absolute path to config.ini
-config_path = os.path.join(script_dir, 'config.ini')
-
-# Load config values from config.ini if arguments are not provided
+# Initialize configparser and read existing config file
 config = configparser.ConfigParser()
-config.read(config_path)
+config.read(config_file_path)
 
-xml_directory = config['DEFAULT'].get('xml_directory', '')
-database_path = config['DEFAULT'].get('database_path', '')
-transitive_closure_db_path = config['DEFAULT'].get('transitive_closure_db_path', '')
-history_db_path = config['DEFAULT'].get('history_db_path', '')
-output_dir = config['DEFAULT'].get('output_dir', '')
+# Set all values in [DEFAULT] to blank
+config['DEFAULT']['xml_directory'] = ''
+config['DEFAULT']['database_path'] = ''
+config['DEFAULT']['transitive_closure_db_path'] = ''
+config['DEFAULT']['history_db_path'] = ''
+config['DEFAULT']['output_dir'] = ''
+
+# Write the changes back to config.ini
+with open(config_file_path, 'w') as configfile:
+    config.write(configfile)
+
+print("Reset all config values to default.")

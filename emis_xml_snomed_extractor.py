@@ -4,36 +4,45 @@ import pyodbc
 import time
 import re
 import logging
-from directory_functions import xml_directory, output_dir, database_path, transitive_closure_db_path, history_db_path, load_config
+from directory_functions import initialize_directory_structure
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
-IGNORED_VALUES = ['ACTIVE','REVIEW', 'ENDED', 'N/A', '385432009','C','U','R','RD','999011011000230107','12464001000001103']
+IGNORED_VALUES = ['ACTIVE','REVIEW', 'ENDED', 'N/A', '385432009','C','U','R','RD','999011011000230107','12464001000001103', 'None']
 NAMESPACE = {'ns': 'http://www.e-mis.com/emisopen'}
 
-# Set up logging
-log_filename = os.path.join(output_dir, "log.txt")
-logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+# Initialize directory and setup logging
+config_file_path, script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir = initialize_directory_structure()
 
-# Clear the log file
-with open(log_filename, 'w'):
-    pass
+def setup_logger(log_file_path):
+    logger = logging.getLogger("main_logger")
+    
+    # File handler
+    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    file_formatter = logging.Formatter('%(message)s')
+    file_handler.setFormatter(file_formatter)
+    
+    # Stream handler
+    stream_handler = logging.StreamHandler()
+    stream_formatter = logging.Formatter('%(message)s')
+    stream_handler.setFormatter(stream_formatter)
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    logger.setLevel(logging.INFO)
+    return logger
 
-# Initialize Logger
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-logging.getLogger('').addHandler(console)
-
-load_config()
+log_file_path = os.path.join(output_dir, "log.txt")
+logger = setup_logger(log_file_path)
 
 start_time = time.time() #start clock
 
 # List XML files
 xml_files = [f for f in os.listdir(xml_directory) if f.endswith('.xml')]
-logging.info(f"Found {len(xml_files)} XML files in the directory: {xml_directory}")
+logger.info(f"Found {len(xml_files)} XML files in the directory: {xml_directory}")
 for file in xml_files:
-    logging.info(f"{file}")
-logging.info("-" * 40)
+    logger.info(f"{file}")
+logger.info("-" * 40)
 
 def sanitize_filename(filename):
     """Remove characters that are illegal in filenames on Windows."""
@@ -53,27 +62,27 @@ def process_single_report(data, report_name, database_path, transitive_closure_d
     processed_value_sets, total_value_sets = save_to_xlsx(data, output_file, connection_main, connection_tc, connection_history)
     
     if processed_value_sets > 0:
-        logging.info(f"For report '{report_name}', successfully processed {processed_value_sets}/{total_value_sets} value sets.")
-        logging.info(f"Excel workbook saved to {output_file}\n")
+        logger.info(f"For report '{report_name}', successfully processed {processed_value_sets}/{total_value_sets} value sets.")
+        logger.info(f"Excel workbook saved to {output_file}\n")
     else:
-        logging.info(f"For report '{report_name}', no value sets were processed as they didn't contain any SNOMED-CT Concepts. No workbook saved.\n")
+        logger.info(f"For report '{report_name}', no value sets were processed as they didn't contain any SNOMED-CT Concepts. No workbook saved.\n")
 
 def extract_and_process_reports_from_xml(xml_path, database_path, transitive_closure_db_path, output_dir):
     tree = ET.parse(xml_path)
     root = tree.getroot()
 
     reports = root.findall(".//ns:report", NAMESPACE)
-    logging.info(f"Found {len(reports)} reports:")
+    logger.info(f"Found {len(reports)} reports:")
 
     # Print names of all reports
     report_names = [report.find(".//ns:name", NAMESPACE).text for report in reports]
     for name in report_names:
-        logging.info(name)
-    logging.info("-" * 40)  # Print separator for clarity
+        logger.info(name)
+    logger.info("-" * 40)  # Print separator for clarity
 
     for report in reports:
         report_name = report.find(".//ns:name", NAMESPACE).text 
-        logging.info(f"Processing report: {report_name}")
+        logger.info(f"Processing report: {report_name}")
         name_content = report.find("ns:name", NAMESPACE).text
         match = re.search(r'\[(.*?)\]', name_content)
         report_name_sanitized = sanitize_filename(report_name)  # Sanitize the report name here
@@ -112,16 +121,16 @@ def extract_values_from_xml_element(element):
             seen_data_sets.add(tuple_data)
             data_sets.append(data)
     
-    logging.info(f"Extracted {len(data_sets)} datasets from the XML.")
+    logger.info(f"Extracted {len(data_sets)} datasets from the XML.")
     for i, dataset in enumerate(data_sets, 1):
-        logging.info(f"Dataset {i}/{len(data_sets)} contains {len(dataset)} value{'s' if len(dataset) != 1 else ''}.")
+        logger.info(f"Dataset {i}/{len(data_sets)} contains {len(dataset)} value{'s' if len(dataset) != 1 else ''}.")
 
     return [list(ds) for ds in data_sets]
 
 def get_cui_from_access(tui_list, display_names, connection_main):
     tui_to_cui = {}
     display_name_to_cui = {}
-    logging.info(f"Using the established connection to the database")
+    logger.info(f"Using the established connection to the database")
 
     # Ensure that the TUI list has distinct values
     distinct_tui_list = list(set(tui_list))
@@ -132,7 +141,7 @@ def get_cui_from_access(tui_list, display_names, connection_main):
         cursor = connection_main.cursor()
         cursor.execute(query_for_tui, distinct_tui_list)
         tui_to_cui = {row.TUI: row.CUI for row in cursor.fetchall()}
-        logging.info(f"Queried {len(tui_to_cui)} Description IDs from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
+        logger.info(f"Matched {len(tui_to_cui)} Description IDs from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
 
     # Query the database for CUI values based on the provided DisplayNames (Terms)
     if display_names: 
@@ -140,11 +149,14 @@ def get_cui_from_access(tui_list, display_names, connection_main):
         cursor = connection_main.cursor()
         cursor.execute(query_for_display_name, display_names)
         display_name_to_cui = {row.Term: row.CUI for row in cursor.fetchall()}
-        logging.info(f"Queried {len(display_name_to_cui)} DisplayNames from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
+        logger.info(f"Matched {len(display_name_to_cui)} DisplayNames from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
 
     return tui_to_cui, display_name_to_cui
 
 def get_all_children_from_database(code, connection, exceptions=None):
+    if code is None:
+        return set()
+        
     if exceptions is None:
         exceptions = set()
     
@@ -169,7 +181,7 @@ def get_all_children_from_database(code, connection, exceptions=None):
         # Exclude exception codes
         excluded_codes = newly_added.intersection(exceptions)
         if excluded_codes:
-            logging.info(f"Excluded child codes for {code}: {', '.join(map(str, excluded_codes))}")
+            logger.info(f"Excluded child codes for {code}: {', '.join(map(str, excluded_codes))}")
         newly_added -= exceptions
 
         # Add the newly discovered children to main set
@@ -182,7 +194,7 @@ def get_all_children_from_database(code, connection, exceptions=None):
     else:  # This situation shouldn't occur, but we'll handle it just in case
         additional_msg = ""
 
-    logging.info(f"Fetching children for code {code} completed in {loop_count} iteration{'s' if loop_count > 1 else ''}{additional_msg}")
+    logger.info(f"Fetching children for code {code} completed in {loop_count} iteration{'s' if loop_count > 1 else ''}{additional_msg}")
     return children
 
 def get_new_cui_from_history(old_cui_list, connection_history):
@@ -197,9 +209,9 @@ def get_new_cui_from_history(old_cui_list, connection_history):
     # Print details about the history lookups
     for old_cui, new_cui in results.items():
         if new_cui:
-            logging.info(f"Old Concept ID: {old_cui} has a new Concept ID: {new_cui}")
+            logger.info(f"Old Concept ID: {old_cui} has a new Concept ID: {new_cui}")
         else:
-            logging.info(f"No new Concept ID found for: {old_cui}")
+            logger.info(f"No new Concept ID found for: {old_cui}")
 
     # Ensure that all OLDCUI values are in the results dictionary, with a value of None if no match was found
     for old_cui in old_cui_list:
@@ -220,14 +232,14 @@ def process_value_set(value_set_data, ws, connection_main, connection_tc, connec
     for entry in value_set_data:
         value, display_name, include_children, exceptions = entry
         cui_value, display_name_cui_value, final_id = fetch_cui_values(tui_to_cui_map, display_name_to_cui_map, value, display_name)
-        all_final_ids.append(final_id)
-        # ... rest of your existing code
+
+        if final_id is not None:  # Check to ensure final_id is not None before appending
+            all_final_ids.append(final_id)
     
     # Fetch new CUIs based on history after populating all_final_ids
     new_cui_map = get_new_cui_from_history(all_final_ids, connection_history)
 
     populate_worksheet(ws, value_set_data, tui_to_cui_map, display_name_to_cui_map, new_cui_map, all_codes_column, all_final_ids, connection_tc, checked_cuis)
-
     write_all_concepts_to_columns(ws, all_codes_column, connection_main)
     return len(all_codes_column)
 
@@ -237,6 +249,9 @@ def populate_worksheet(ws, value_set_data, tui_to_cui_map, display_name_to_cui_m
         value, display_name, include_children, exceptions = entry
         cui_value, display_name_cui_value, final_id = fetch_cui_values(tui_to_cui_map, display_name_to_cui_map, value, display_name)
         new_cui = new_cui_map.get(final_id)
+
+        if final_id is not None and final_id != "Not Found":  # Check to ensure final_id is not "Not Found" before appending
+            all_final_ids.append(final_id)
         
         ws.append([value, display_name, include_children, cui_value, display_name_cui_value, final_id, new_cui if new_cui else "N/A"])
         handle_children_and_update_codes(all_codes_column, final_id, new_cui, include_children, connection_tc, exceptions, checked_cuis)
@@ -262,7 +277,7 @@ def handle_children_and_update_codes(all_codes_column, final_id, new_cui, includ
                 children = get_all_children_from_database(code, connection_tc, exceptions=exceptions)
                 all_codes_column.update(children)
             except Exception as e:
-                logging.info(f"Did not include child codes for {code}: {e}")
+                logger.info(f"Did not include child codes for {code}: {e}")
 
 def write_all_concepts_to_columns(ws, all_codes_column, connection_main):
     ws['J1'], ws['K1'] = 'All Concepts including Children', 'Terms for All Concepts'
@@ -278,7 +293,7 @@ def fetch_all_terms(all_codes_column, connection_main):
         cursor_main.execute(query, list(all_codes_column))
         code_to_term_map = {row.CUI: row.Term for row in cursor_main.fetchall()}
     except Exception as e:
-        logging.info(f"Exception while fetching terms: {e}")
+        logger.info(f"Exception while fetching terms: {e}")
     return code_to_term_map
 
 def populate_columns_j_and_k(ws, code_to_term_map, all_codes_column):
@@ -332,7 +347,7 @@ if __name__ == "__main__":
         if xml_file.endswith(".xml"):
             xml_path = os.path.join(xml_directory, xml_file)
             base_name = os.path.basename(xml_path).replace(".xml", "")
-            logging.info(f"Starting to process: {xml_file}")
+            logger.info(f"Starting to process: {xml_file}")
             extract_and_process_reports_from_xml(xml_path, database_path, transitive_closure_db_path, output_dir)
     
     connection_main.close()
@@ -341,5 +356,5 @@ if __name__ == "__main__":
     
     end_time = time.time()
     elapsed_time = end_time - start_time
-    logging.info(f"Script executed in {elapsed_time:.2f} seconds.")
-    logging.info(f"Log has been saved to: {log_filename}")
+    logger.info(f"Script executed in {elapsed_time:.2f} seconds.")
+    logger.info(f"Log has been saved to: {output_dir}")

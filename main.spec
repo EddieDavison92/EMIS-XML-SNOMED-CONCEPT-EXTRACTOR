@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:/Users/eddie/OneDrive/Documents/Projects/EMIS-XML-SNOMED-CONCEPT-EXTRACTOR/config.ini', '.'), ('EMIS XML SNOMED CONCEPT EXTRACTOR.py', '.'), ('directory_functions.py', '.')], 
+    datas=[('config.ini', '.'), ('emis_xml_snomed_extractor.py', '.'), ('directory_functions.py', '.')], 
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

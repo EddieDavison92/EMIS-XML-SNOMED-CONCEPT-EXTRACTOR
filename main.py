@@ -1,20 +1,24 @@
 import tkinter as tk
 import customtkinter as ctk
-from directory_functions import *
+from directory_functions import initialize_directory_structure, insert_path, select_directory, validate_and_clear_invalid_paths, check_log_file_exists, save_config
 from text import header, content
 import os
 import subprocess
-import logging
 import threading
 import webbrowser
+import logging
 from collections import deque
 
-load_config()
+# Initialize directory
+config_file_path, script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir = initialize_directory_structure()
+
+# Define an empty list to hold the entries
+entries = []
 
 ctk.set_default_color_theme("dark-blue")
 
 class TextHandler(logging.Handler):
-    def __init__(self, text_widget, max_logs=500):
+    def __init__(self, text_widget, max_logs=5000):
         logging.Handler.__init__(self)
         self.text_widget = text_widget
         self.log_cache = deque(maxlen=max_logs)
@@ -81,7 +85,7 @@ def main():
      # Add a title above the input boxes in the `input_frame`
     config_title_label = ctk.CTkLabel(input_frame, text="Configuration", font=("",16,"bold"))
     config_title_label.grid(row=0, column=0, columnspan=3, sticky="w", padx=5, pady=5)
-
+    
     # Add input fields with default values
     labels = ["XML Input Directory", "DMWB NHS SNOMED.mdb", "DMWB NHS SNOMED Transitive Closure.mdb", "DMWB NHS SNOMED History.mdb", "Output Directory"]
     for i, (label_text, default_value) in enumerate(zip(labels, [xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir])):
@@ -117,18 +121,31 @@ def main():
     scrollbar.grid(row=0, column=1, sticky="ns")
     log_display.config(yscrollcommand=scrollbar.set)
 
+    def setup_logger(output_dir):
+        logger = logging.getLogger("main_logger")
+        handler = TextHandler(log_display)
+        formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        file_handler = logging.FileHandler(os.path.join(output_dir, "log.txt"), encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.INFO)
+        return logger
+
+    def clear_log(log_file_path):
+        with open(log_file_path, 'w'):
+            pass
+
+    # Create and configure logger
+    logger = setup_logger(output_dir)
+    clear_log(log_file_path=os.path.join(output_dir, "log.txt"))
+
     # Adjusting the log box and adding a title above it
     log_title_label = ctk.CTkLabel(input_frame, text="Execution Log",font=("",16,"bold"))
     log_title_label.grid(row=len(labels) + 1, column=0, sticky="w", padx=5, pady=5)  # row number changed here
 
-    check_log_file_exists
-
-    # Initialize logger for GUI
-    handler = TextHandler(log_display)
-    formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    check_log_file_exists()
 
     # Add a frame for the "Run" button outside the input frame
     run_frame = ctk.CTkFrame(root, fg_color="transparent")
@@ -137,14 +154,14 @@ def main():
     run_btn.pack(side="right", padx=5, pady=5)
 
     # Create a frame for the license button at the bottom-left of the root window
-    # license_frame = ctk.CTkFrame(root, fg_color="transparent")
-    # license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+    license_frame = ctk.CTkFrame(root, fg_color="transparent")
+    license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
 
-   # def open_license():
-        # webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
+    def open_license():
+        webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
 
-    # license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
-    # license_btn.pack(side="left", padx=10, pady=5)
+    license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
+    license_btn.pack(side="left", padx=10, pady=5)
 
     def get_log_file_path():
         """Return the path to the log file."""
@@ -188,8 +205,8 @@ def main():
             pipe.close()
 
         # Start threads for stdout and stderr
-        stdout_thread = threading.Thread(target=read_from_pipe, args=(process.stdout, logging.info))
-        stderr_thread = threading.Thread(target=read_from_pipe, args=(process.stderr, logging.error))
+        stdout_thread = threading.Thread(target=read_from_pipe, args=(process.stdout, logger.info))
+        stderr_thread = threading.Thread(target=read_from_pipe, args=(process.stderr, logger.error))
         stdout_thread.start()
         stderr_thread.start()
         stdout_thread.join()
@@ -209,7 +226,7 @@ def main():
         else:
             paths = [xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir]
 
-        save_config(*paths)
+        save_config(entries)
 
         args = [
             "python", "-u",
@@ -227,4 +244,7 @@ def main():
     root.mainloop()
 
 if __name__ == "__main__":
+
+    check_log_file_exists() 
+
     main()
