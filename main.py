@@ -123,6 +123,7 @@ def main():
 
     def setup_logger(output_dir):
         logger = logging.getLogger("main_logger")
+        logger.handlers = []
         handler = TextHandler(log_display)
         formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(formatter)
@@ -139,7 +140,6 @@ def main():
 
     # Create and configure logger
     logger = setup_logger(output_dir)
-    clear_log(log_file_path=os.path.join(output_dir, "log.txt"))
 
     # Adjusting the log box and adding a title above it
     log_title_label = ctk.CTkLabel(input_frame, text="Execution Log",font=("",16,"bold"))
@@ -227,6 +227,7 @@ def main():
             paths = [xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir]
 
         save_config(entries)
+        clear_log(log_file_path=os.path.join(output_dir, "log.txt"))
 
         args = [
             "python", "-u",

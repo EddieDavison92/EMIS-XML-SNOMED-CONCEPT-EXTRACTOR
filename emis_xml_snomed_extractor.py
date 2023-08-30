@@ -16,18 +16,17 @@ config_file_path, script_path, xml_directory, database_path, transitive_closure_
 
 def setup_logger(log_file_path):
     logger = logging.getLogger("main_logger")
-    
-    # File handler
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
-    file_formatter = logging.Formatter('%(message)s')
-    file_handler.setFormatter(file_formatter)
-    
+    for handler in logger.handlers[:]:
+        handler.close()
+        logger.removeHandler(handler)
+
+    # Formatter
+    formatter = logging.Formatter('%(message)s')
+        
     # Stream handler
     stream_handler = logging.StreamHandler()
-    stream_formatter = logging.Formatter('%(message)s')
-    stream_handler.setFormatter(stream_formatter)
-    
-    logger.addHandler(file_handler)
+    stream_handler.setFormatter(formatter)
+
     logger.addHandler(stream_handler)
     logger.setLevel(logging.INFO)
     return logger
