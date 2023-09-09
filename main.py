@@ -154,14 +154,14 @@ def main():
     run_btn.pack(side="right", padx=5, pady=5)
 
     # Create a frame for the license button at the bottom-left of the root window
-    license_frame = ctk.CTkFrame(root, fg_color="transparent")
-    license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+   # license_frame = ctk.CTkFrame(root, fg_color="transparent")
+    #license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
 
     def open_license():
         webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
 
-    license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
-    license_btn.pack(side="left", padx=10, pady=5)
+   # license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
+   # license_btn.pack(side="left", padx=10, pady=5)
 
     def get_log_file_path():
         """Return the path to the log file."""

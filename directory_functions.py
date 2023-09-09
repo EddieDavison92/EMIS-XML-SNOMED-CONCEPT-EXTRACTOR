@@ -53,22 +53,19 @@ def initialize_directory_structure():
     
     # Determine the script path dynamically
     if getattr(sys, 'frozen', False):
-        application_path = os.path.dirname(sys.executable)
+        application_path = sys._MEIPASS  # Change is here
     else:
         application_path = os.path.dirname(__file__)
     script_path = os.path.join(application_path, 'emis_xml_snomed_extractor.py')
     
     # Paths for your specific needs, initialized from config if available
     config_file_path = config.get('DEFAULT', 'config_file_path', fallback=os.path.join(application_path, 'config.ini'))
-    xml_directory = config.get('DEFAULT', 'xml_directory', fallback=os.path.join(application_path, 'xml_directory'))
-    database_path = config.get('DEFAULT', 'database_path', fallback=os.path.join(application_path, 'database'))
-    transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path', fallback=os.path.join(database_path, 'transitive_closure'))
-    history_db_path = config.get('DEFAULT', 'history_db_path', fallback=os.path.join(database_path, 'history'))
-    output_dir = config.get('DEFAULT', 'output_dir', fallback=os.path.join(application_path, 'output'))
+    xml_directory = config.get('DEFAULT', 'xml_directory', fallback='')
+    database_path = config.get('DEFAULT', 'database_path', fallback='')
+    transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path', fallback='')
+    history_db_path = config.get('DEFAULT', 'history_db_path', fallback='')
+    output_dir = config.get('DEFAULT', 'output_dir', fallback='')
     
-    for path in [os.path.dirname(config_file_path), script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir]:
-        create_folder(path)
-
     return config_file_path, script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir
 
 initialize_directory_structure()
