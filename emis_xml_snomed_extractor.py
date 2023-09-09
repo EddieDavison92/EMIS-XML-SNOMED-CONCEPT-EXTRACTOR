@@ -4,15 +4,31 @@ import pyodbc
 import time
 import re
 import logging
+import argparse
 from directory_functions import initialize_directory_structure
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
+# Argument parsing
+parser = argparse.ArgumentParser(description="Get paths from inputs")
+parser.add_argument("--xml_directory", required=True, help="XML Directory Path")
+parser.add_argument("--database_path", required=True, help="Database Path")
+parser.add_argument("--transitive_closure_db_path", required=True, help="Transitive Closure DB Path")
+parser.add_argument("--history_db_path", required=True, help="History DB Path")
+parser.add_argument("--output_dir", required=True, help="Output Directory")
+
+args = parser.parse_args()
+
+# Extract the arguments
+xml_directory = args.xml_directory
+database_path = args.database_path
+transitive_closure_db_path = args.transitive_closure_db_path
+history_db_path = args.history_db_path
+output_dir = args.output_dir
+
+# Constants
 IGNORED_VALUES = ['ACTIVE','REVIEW', 'ENDED', 'N/A', '385432009','C','U','R','RD','999011011000230107','12464001000001103', 'None']
 NAMESPACE = {'ns': 'http://www.e-mis.com/emisopen'}
-
-# Initialize directory and setup logging
-config_file_path, script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir = initialize_directory_structure()
 
 def setup_logger(log_file_path):
     logger = logging.getLogger("main_logger")
@@ -93,7 +109,7 @@ def extract_values_from_xml_element(element):
     data_sets = []
     seen_data_sets = set()
 
-    for valueSet in element.findall(".//ns:valueSet", NAMESPACE):  # Change criterion to valueSet
+    for valueSet in element.findall(".//ns:valueSet", NAMESPACE):
         data = []
 
         for values in valueSet.findall(".//ns:values", NAMESPACE):
@@ -110,7 +126,7 @@ def extract_values_from_xml_element(element):
             includeChildren = includeChildren_elem.text if includeChildren_elem is not None else "false"
 
             exception_codes = set()
-            for exception in valueSet.findall('.//ns:exception//ns:values/ns:value', NAMESPACE):  # Updated XPath
+            for exception in valueSet.findall('.//ns:exception//ns:values/ns:value', NAMESPACE):
                 exception_codes.add(exception.text) 
 
             data.append((value, displayName, includeChildren, frozenset(exception_codes)))
@@ -190,7 +206,7 @@ def get_all_children_from_database(code, connection, exceptions=None):
         additional_msg = ". No child codes found."
     elif len(children) > 1:  # Code itself plus additional children
         additional_msg = f". Found {len(children) - 1} child codes."
-    else:  # This situation shouldn't occur, but we'll handle it just in case
+    else: 
         additional_msg = ""
 
     logger.info(f"Fetching children for code {code} completed in {loop_count} iteration{'s' if loop_count > 1 else ''}{additional_msg}")
