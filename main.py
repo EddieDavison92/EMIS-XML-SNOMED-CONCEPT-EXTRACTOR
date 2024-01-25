@@ -3,10 +3,13 @@ import customtkinter as ctk
 from directory_functions import initialize_directory_structure, insert_path, select_directory, validate_and_clear_invalid_paths, check_log_file_exists, save_config
 from text import header, content
 import os
+import re
+import sys
 import subprocess
 import threading
 import webbrowser
 import logging
+import shutil
 from collections import deque
 
 # Initialize directory
@@ -153,15 +156,15 @@ def main():
     run_btn = ctk.CTkButton(run_frame, text="Run", command=lambda: run_script(entries))
     run_btn.pack(side="right", padx=5, pady=5)
 
-    # Create a frame for the license button at the bottom-left of the root window
-   # license_frame = ctk.CTkFrame(root, fg_color="transparent")
-    #license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
+    # Create a frame for the license button 
+    license_frame = ctk.CTkFrame(root, fg_color="transparent")
+    license_frame.grid(row=2, column=0, padx=5, pady=(0,5), sticky="w")
 
     def open_license():
         webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.txt')
 
-   # license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
-   # license_btn.pack(side="left", padx=10, pady=5)
+    license_btn = ctk.CTkButton(license_frame, text="License", command=open_license)
+    license_btn.pack(side="left", padx=10, pady=5)
 
     def get_log_file_path():
         """Return the path to the log file."""
@@ -177,6 +180,30 @@ def main():
             open_log_btn.pack_forget()
 
     open_log_btn = ctk.CTkButton(run_frame, text="Open Log", command=open_log_file)
+
+    def run_consolidate_workbooks():
+        script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'consolidate_workbooks.py')
+        process = subprocess.Popen([sys.executable, script_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        def stream_output():
+            for line in iter(process.stdout.readline, b''):
+                # Remove the timestamp and the "__main__ - INFO" part from the line.
+                line = re.sub(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - __main__ - INFO - ', '', line.decode())
+                logger.info(line.strip())
+
+        threading.Thread(target=stream_output).start()
+
+    consolidate_button = ctk.CTkButton(run_frame, text="Consolidate Workbooks", command=run_consolidate_workbooks, width=20)
+    
+    # Modify this function to update the visibility of the new button
+    def update_open_log_button_visibility():
+        if os.path.exists(get_log_file_path()):
+            open_log_btn.pack(side="left", padx=10, pady=5)
+            consolidate_button.pack(side="left", padx=10, pady=5)
+        else:
+            open_log_btn.pack_forget()
+            consolidate_button.pack_forget()
+
     update_open_log_button_visibility()
 
     # Create a StringVar for the last entry.
@@ -184,21 +211,38 @@ def main():
     entries[-1].configure(textvariable=output_dir_var)
     output_dir_var.trace_add("write", lambda *args: update_open_log_button_visibility())
 
-    def execute_subprocess(args):
-        # Check if we are on Windows and set creationflags if so
-        creation_flags = 0
-        if os.name == 'nt':
-            creation_flags = subprocess.CREATE_NO_WINDOW
+    def get_resource_path(relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_path, relative_path)
 
+    def execute_subprocess(args):
+        # Attempt to find an external Python interpreter in the system's PATH
+        python_interpreter = shutil.which('python')
+
+        if python_interpreter:
+            logger.info(f"Using Python interpreter at: {python_interpreter}")
+        else:
+            python_interpreter = sys.executable
+            logger.warning("No Python interpreter found. Please ensure Python is installed and set in the PATH.")
+
+        # Construct the script path using get_resource_path
+        script_path = get_resource_path('emis_xml_snomed_extractor.py')
+
+        # Build the full command
+        full_command = [python_interpreter, script_path] + args
+
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         process = subprocess.Popen(
-            args, 
+            full_command, 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE, 
             text=True, 
             universal_newlines=True,
-            creationflags=creation_flags  # Add this line to suppress the terminal window
+            creationflags=creation_flags
         )
-        
+        logger.info("Subprocess started")
+
         def read_from_pipe(pipe, log_func):
             for line in iter(pipe.readline, ''):
                 log_func(line.strip())
@@ -215,10 +259,12 @@ def main():
         process.wait()
 
         if process.returncode != 0:
-            logging.error(f"Script failed with error code {process.returncode}.")
+            logger.error(f"Script failed with error code {process.returncode}.")
 
         # Check for log file after the script completes
         update_open_log_button_visibility()
+
+        return process.returncode
 
     def run_script(entries=None):
         if entries:
@@ -230,8 +276,6 @@ def main():
         clear_log(log_file_path=os.path.join(output_dir, "log.txt"))
 
         args = [
-            "python", "-u",
-            script_path,
             "--xml_directory", paths[0],
             "--database_path", paths[1],
             "--transitive_closure_db_path", paths[2],

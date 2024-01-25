@@ -10,12 +10,12 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 # Argument parsing
-parser = argparse.ArgumentParser(description="Get paths from inputs")
-parser.add_argument("--xml_directory", required=True, help="XML Directory Path")
-parser.add_argument("--database_path", required=True, help="Database Path")
-parser.add_argument("--transitive_closure_db_path", required=True, help="Transitive Closure DB Path")
-parser.add_argument("--history_db_path", required=True, help="History DB Path")
-parser.add_argument("--output_dir", required=True, help="Output Directory")
+parser = argparse.ArgumentParser()
+parser.add_argument('--xml_directory', required=True)
+parser.add_argument('--database_path', required=True)
+parser.add_argument('--transitive_closure_db_path', required=True)
+parser.add_argument('--history_db_path', required=True)
+parser.add_argument('--output_dir', required=True)
 
 args = parser.parse_args()
 
@@ -142,6 +142,11 @@ def extract_values_from_xml_element(element):
 
     return [list(ds) for ds in data_sets]
 
+def chunk_list(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
 def get_cui_from_access(tui_list, display_names, connection_main):
     tui_to_cui = {}
     display_name_to_cui = {}
@@ -150,21 +155,19 @@ def get_cui_from_access(tui_list, display_names, connection_main):
     # Ensure that the TUI list has distinct values
     distinct_tui_list = list(set(tui_list))
 
-    # Query the database for CUI values based on the provided TUI list
-    if distinct_tui_list:
-        query_for_tui = "SELECT TUI, CUI FROM SCT WHERE TUI IN ({})".format(','.join(['?'] * len(distinct_tui_list)))
+    # Chunk processing for TUI list
+    for tui_chunk in chunk_list(distinct_tui_list, 500):
+        query_for_tui = "SELECT TUI, CUI FROM SCT WHERE TUI IN ({})".format(','.join(['?'] * len(tui_chunk)))
         cursor = connection_main.cursor()
-        cursor.execute(query_for_tui, distinct_tui_list)
-        tui_to_cui = {row.TUI: row.CUI for row in cursor.fetchall()}
-        logger.info(f"Matched {len(tui_to_cui)} Description IDs from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
+        cursor.execute(query_for_tui, tui_chunk)
+        tui_to_cui.update({row.TUI: row.CUI for row in cursor.fetchall()})
 
-    # Query the database for CUI values based on the provided DisplayNames (Terms)
-    if display_names: 
-        query_for_display_name = "SELECT Term, CUI FROM SCT WHERE Term IN ({})".format(','.join(['?'] * len(display_names)))
+    # Chunk processing for display names
+    for display_chunk in chunk_list(display_names, 500):
+        query_for_display_name = "SELECT Term, CUI FROM SCT WHERE Term IN ({})".format(','.join(['?'] * len(display_chunk)))
         cursor = connection_main.cursor()
-        cursor.execute(query_for_display_name, display_names)
-        display_name_to_cui = {row.Term: row.CUI for row in cursor.fetchall()}
-        logger.info(f"Matched {len(display_name_to_cui)} DisplayNames from XML with SNOMED Description IDs (TUI) from the database and return Concept IDs (CUI).")
+        cursor.execute(query_for_display_name, display_chunk)
+        display_name_to_cui.update({row.Term: row.CUI for row in cursor.fetchall()})
 
     return tui_to_cui, display_name_to_cui
 
@@ -181,58 +184,58 @@ def get_all_children_from_database(code, connection, exceptions=None):
     loop_count = 0
 
     while newly_added:
-        # Increment the loop count
         loop_count += 1
+        # Process the newly added set in chunks
+        temp_new_children = set()
+        for chunk in chunk_list(list(newly_added), 500):
+            query = "SELECT SubtypeID FROM SCTTC WHERE SupertypeID IN ({})".format(",".join(['?'] * len(chunk)))
+            cursor = connection.cursor()
+            cursor.execute(query, chunk)
+            temp_new_children.update({row.SubtypeID for row in cursor.fetchall()})
 
-        # Get direct children of the codes in newly_added
-        query = "SELECT SubtypeID FROM SCTTC WHERE SupertypeID IN ({})".format(",".join(['?'] * len(newly_added)))
-        cursor = connection.cursor()
-        cursor.execute(query, list(newly_added))
-        new_children = {row.SubtypeID for row in cursor.fetchall()}
-        
         # Remove the ones we already know about to avoid infinite loops
-        newly_added = new_children - children
+        newly_added = temp_new_children - children
 
         # Exclude exception codes
-        excluded_codes = newly_added.intersection(exceptions)
-        if excluded_codes:
-            logger.info(f"Excluded child codes for {code}: {', '.join(map(str, excluded_codes))}")
         newly_added -= exceptions
 
-        # Add the newly discovered children to main set
+        # Add the newly discovered children to the main set
         children.update(newly_added)
 
-    if len(children) == 1:  # Only the code itself, no children
-        additional_msg = ". No child codes found."
-    elif len(children) > 1:  # Code itself plus additional children
-        additional_msg = f". Found {len(children) - 1} child codes."
-    else: 
-        additional_msg = ""
+        if excluded_codes := newly_added.intersection(exceptions):
+            logger.info(f"Excluded child codes for {code}: {', '.join(map(str, excluded_codes))}")
 
+    # Logging information about the operation
+    additional_msg = ". No child codes found." if len(children) == 1 else f". Found {len(children) - 1} child codes." if len(children) > 1 else ""
     logger.info(f"Fetching children for code {code} completed in {loop_count} iteration{'s' if loop_count > 1 else ''}{additional_msg}")
+
     return children
 
 def get_new_cui_from_history(old_cui_list, connection_history):
     if not old_cui_list:  # Check if the list is empty
         return {}
-    cursor = connection_history.cursor()
-    placeholders = ', '.join('?' for _ in old_cui_list)
-    query = f"SELECT OLDCUI, NEWCUI FROM SCTHIST WHERE OLDCUI IN ({placeholders})"
-    cursor.execute(query, old_cui_list)
-    results = {row.OLDCUI: row.NEWCUI for row in cursor.fetchall()}
-    
-    # Print details about the history lookups
-    for old_cui, new_cui in results.items():
+
+    new_cui_map = {}
+
+    # Chunk processing for old CUI list
+    for cui_chunk in chunk_list(old_cui_list, 500):
+        placeholders = ', '.join('?' for _ in cui_chunk)
+        query = f"SELECT OLDCUI, NEWCUI FROM SCTHIST WHERE OLDCUI IN ({placeholders})"
+        cursor = connection_history.cursor()
+        cursor.execute(query, cui_chunk)
+        results = {row.OLDCUI: row.NEWCUI for row in cursor.fetchall()}
+
+        # Update the new CUI map with results from this chunk
+        new_cui_map.update(results)
+
+    # Log details about the history lookups
+    for old_cui, new_cui in new_cui_map.items():
         if new_cui:
             logger.info(f"Old Concept ID: {old_cui} has a new Concept ID: {new_cui}")
         else:
             logger.info(f"No new Concept ID found for: {old_cui}")
 
-    # Ensure that all OLDCUI values are in the results dictionary, with a value of None if no match was found
-    for old_cui in old_cui_list:
-        results.setdefault(old_cui, None)
-    
-    return results
+    return new_cui_map
 
 def fetch_cui_and_display_maps(value_set_data, connection_main):
     tui_values = [entry[0] for entry in value_set_data]
@@ -300,15 +303,13 @@ def write_all_concepts_to_columns(ws, all_codes_column, connection_main):
     populate_columns_j_and_k(ws, code_to_term_map, all_codes_column)
 
 def fetch_all_terms(all_codes_column, connection_main):
-    # Fetch terms for all_codes_column
+    # Fetch terms for all_codes_column with chunking
     code_to_term_map = {}
-    try:
-        query = f"SELECT CUI, Term FROM SCT WHERE CUI IN ({','.join(['?'] * len(all_codes_column))})"
+    for code_chunk in chunk_list(list(all_codes_column), 500):
+        query = f"SELECT CUI, Term FROM SCT WHERE CUI IN ({','.join(['?'] * len(code_chunk))})"
         cursor_main = connection_main.cursor()
-        cursor_main.execute(query, list(all_codes_column))
-        code_to_term_map = {row.CUI: row.Term for row in cursor_main.fetchall()}
-    except Exception as e:
-        logger.info(f"Exception while fetching terms: {e}")
+        cursor_main.execute(query, code_chunk)
+        code_to_term_map.update({row.CUI: row.Term for row in cursor_main.fetchall()})
     return code_to_term_map
 
 def populate_columns_j_and_k(ws, code_to_term_map, all_codes_column):

@@ -1,4 +1,5 @@
 import os
+import tempfile
 import configparser
 import sys
 import logging
@@ -10,9 +11,15 @@ logger = logging.getLogger("main_logger")
 
 def determine_application_path():
     if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
+        # Running as an exe, use a specific directory in the temporary directory
+        temp_dir = os.path.join(tempfile.gettempdir(), 'emis_xml_snomed_extractor')
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        return temp_dir
     else:
-        return os.path.dirname(os.path.abspath(__file__))
+        # Running in a development environment, e.g., VSCode
+        return os.path.expanduser('~/emis_xml_snomed_extractor')
+
 
 def create_folder(folder_path):
     if not os.path.exists(folder_path):
@@ -22,6 +29,7 @@ def create_folder(folder_path):
         logger.info(f"Folder {folder_path} already exists.")
 
 def load_config(config_file_path):
+    os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
     config = configparser.ConfigParser()
     try:
         config.read(config_file_path)
@@ -31,6 +39,7 @@ def load_config(config_file_path):
         return None
 
 def save_config(entries):
+    os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
     config['DEFAULT'] = {
         'xml_directory': entries[0].get(),
         'database_path': entries[1].get(),
@@ -45,29 +54,32 @@ def save_config(entries):
 
 # Initialize directory and load config at file load
 application_path = determine_application_path()
-config_file_path = os.path.join(application_path, 'config.ini')
+config_file_path = os.path.normpath(os.path.join(application_path, 'config.ini'))  # Normalize path
 config = load_config(config_file_path)
 
 def initialize_directory_structure():
     global xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir
     
-    # Determine the script path dynamically
-    if getattr(sys, 'frozen', False):
-        application_path = sys._MEIPASS  # Change is here
-    else:
-        application_path = os.path.dirname(__file__)
-    script_path = os.path.join(application_path, 'emis_xml_snomed_extractor.py')
-    
-    # Paths for your specific needs, initialized from config if available
-    config_file_path = config.get('DEFAULT', 'config_file_path', fallback=os.path.join(application_path, 'config.ini'))
-    xml_directory = config.get('DEFAULT', 'xml_directory', fallback='')
-    database_path = config.get('DEFAULT', 'database_path', fallback='')
-    transitive_closure_db_path = config.get('DEFAULT', 'transitive_closure_db_path', fallback='')
-    history_db_path = config.get('DEFAULT', 'history_db_path', fallback='')
-    output_dir = config.get('DEFAULT', 'output_dir', fallback='')
+    # Determine the application path and normalize the config file path
+    application_path = determine_application_path()
+    config_file_path = os.path.normpath(os.path.join(application_path, 'config.ini'))
+
+    # Normalize script path
+    script_path = os.path.normpath(os.path.join(application_path, 'emis_xml_snomed_extractor.py'))
+
+    # Load configuration and normalize paths
+    config = load_config(config_file_path)
+
+    # Use config values or fallback to defaults, and normalize paths
+    xml_directory = os.path.normpath(config.get('DEFAULT', 'xml_directory', fallback=''))
+    database_path = os.path.normpath(config.get('DEFAULT', 'database_path', fallback=''))
+    transitive_closure_db_path = os.path.normpath(config.get('DEFAULT', 'transitive_closure_db_path', fallback=''))
+    history_db_path = os.path.normpath(config.get('DEFAULT', 'history_db_path', fallback=''))
+    output_dir = os.path.normpath(config.get('DEFAULT', 'output_dir', fallback=''))
     
     return config_file_path, script_path, xml_directory, database_path, transitive_closure_db_path, history_db_path, output_dir
 
+# Call the function to initialize and set global variables
 initialize_directory_structure()
 
 def select_directory(current_value="", file_mode=False):

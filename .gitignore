@@ -17,3 +17,4 @@ __pycache__/
 .vscode/
 dist/
 pip-selfcheck.json
+test_script.py
