@@ -1,18 +1,18 @@
 import os
 import openpyxl
+import argparse
 import logging
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-logger.info(f"Consolidating workbooks...")
-
 def consolidate_workbooks(source_dir, output_dir):
+    logger.info("Consolidating workbooks from directory: {}".format(source_dir))
     # Ensure the output directory exists
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -47,7 +47,14 @@ def consolidate_workbooks(source_dir, output_dir):
     consolidated_wb.save(output_file)
     logger.info(f"Consolidated workbook saved to: {output_file}")
 
-# Usage
-source_directory = r'C:\Users\eddie\NHS\HealtheAnalytics Workstream - LTC LCS Workstream\Product Specifications\Data modelling\output snomed codes'  # Update this with the path to your directory
-output_directory = r'C:\Users\eddie\NHS\HealtheAnalytics Workstream - LTC LCS Workstream\Product Specifications\Data modelling\output snomed codes'  # Update this with the path to your desired output directory
-consolidate_workbooks(source_directory, output_directory)
+def main():
+    parser = argparse.ArgumentParser(description='Consolidate Workbooks')
+    parser.add_argument('--source_dir', type=str, required=True, help='Source directory for workbooks')
+    parser.add_argument('--output_dir', type=str, required=True, help='Output directory for the consolidated workbook')
+
+    args = parser.parse_args()
+    consolidate_workbooks(args.source_dir, args.output_dir)
+
+if __name__ == '__main__':
+    main()
+

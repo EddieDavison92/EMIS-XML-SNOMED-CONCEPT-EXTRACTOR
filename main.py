@@ -181,17 +181,55 @@ def main():
 
     open_log_btn = ctk.CTkButton(run_frame, text="Open Log", command=open_log_file)
 
-    def run_consolidate_workbooks():
-        script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'consolidate_workbooks.py')
-        process = subprocess.Popen([sys.executable, script_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    def run_consolidate_workbooks(entries=None):
+        def execute_subprocess():
+            # Locate an external Python interpreter
+            python_interpreter = shutil.which('python')
+            if not python_interpreter:
+                logger.warning("External Python interpreter not found. Falling back to the current interpreter.")
+                python_interpreter = sys.executable
 
-        def stream_output():
-            for line in iter(process.stdout.readline, b''):
-                # Remove the timestamp and the "__main__ - INFO" part from the line.
-                line = re.sub(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - __main__ - INFO - ', '', line.decode())
-                logger.info(line.strip())
+            # Construct the path to your script
+            script_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'consolidate_workbooks.py')
 
-        threading.Thread(target=stream_output).start()
+            # Set source_dir
+            source_dir = output_dir
+
+            # Build the full command with arguments
+            full_command = [python_interpreter, script_path, '--source_dir', source_dir, '--output_dir', output_dir]
+
+            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            process = subprocess.Popen(
+                full_command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True, 
+                universal_newlines=True,
+                creationflags=creation_flags
+            )
+            logger.info("Consolidate Workbooks subprocess started")
+
+            def stream_output(pipe, log_func):
+                for line in iter(pipe.readline, ''):
+                    log_func(line.strip())
+                pipe.close()
+
+            # Start threads for stdout and stderr
+            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, logger.info))
+            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, logger.error))
+            stdout_thread.start()
+            stderr_thread.start()
+
+            process.wait()
+
+            if process.returncode != 0:
+                logger.error(f"Consolidate Workbooks script failed with error code {process.returncode}.")
+
+            # Check for log file after the script completes
+            update_open_log_button_visibility()
+
+        # Start the subprocess in a separate thread
+        threading.Thread(target=execute_subprocess).start()
 
     consolidate_button = ctk.CTkButton(run_frame, text="Consolidate Workbooks", command=run_consolidate_workbooks, width=20)
     

@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.ini', '.'), ('emis_xml_snomed_extractor.py', '.'), ('directory_functions.py', '.')], 
+    datas=[('config.ini', '.'), ('emis_xml_snomed_extractor.py', '.'), ('directory_functions.py', '.'), ('consolidate_workbooks.py', '.')], 
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
