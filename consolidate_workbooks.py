@@ -2,6 +2,8 @@ import os
 import openpyxl
 import argparse
 import logging
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.utils import get_column_letter
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -10,6 +12,30 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter('%(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+def format_and_sort_worksheet(worksheet):
+    # Sort the data based on columns 'A' and then 'B'
+    data = worksheet.values
+    headers = next(data, None)
+    sorted_data = sorted(data, key=lambda x: (x[0], x[1]))
+
+    worksheet.delete_rows(2, worksheet.max_row - 1)
+    for row in sorted_data:
+        worksheet.append(row)
+
+    # Apply table style
+    tab = Table(displayName="Table1", ref=worksheet.dimensions)
+    style = TableStyleInfo(name="TableStyleMedium4", showFirstColumn=False,
+                           showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+    tab.tableStyleInfo = style
+    worksheet.add_table(tab)
+
+    # Adjust column widths
+    for column in worksheet.columns:
+        max_length = max(len(str(cell.value)) for cell in column)
+        adjusted_width = (max_length + 2)
+        worksheet.column_dimensions[get_column_letter(column[0].column)].width = adjusted_width
+
 
 def consolidate_workbooks(source_dir, output_dir):
     logger.info("Consolidating workbooks from directory: {}".format(source_dir))
@@ -40,6 +66,9 @@ def consolidate_workbooks(source_dir, output_dir):
                         consolidated_ws.append([file_name, sheet_name, code, term])
             wb.close()
 
+    # Sort and format the consolidated worksheet
+    format_and_sort_worksheet(consolidated_ws)
+    
     # Define the filename for the new workbook
     output_file = os.path.join(output_dir, "Consolidated_Workbook.xlsx")
 
