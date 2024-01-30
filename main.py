@@ -3,7 +3,6 @@ import customtkinter as ctk
 from directory_functions import initialize_directory_structure, insert_path, select_directory, validate_and_clear_invalid_paths, check_log_file_exists, save_config
 from text import header, content
 import os
-import re
 import sys
 import subprocess
 import threading
