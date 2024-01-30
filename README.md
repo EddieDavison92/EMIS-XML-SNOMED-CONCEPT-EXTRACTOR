@@ -30,7 +30,7 @@ The program does not match concept IDs for EMIS Drug Groups or library items. Fo
 
 Author:
 Eddie Davison | eddie.davison@nhs.net | NHS North Central London ICB
-Copyright (C) 2023 - Eddie Davison
+Copyright (C) 2024
 
 Licensing:
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License v3. See [license.txt](./license.txt) or [GNU Licenses](https://www.gnu.org/licenses/) for full details..
